@@ -1,0 +1,135 @@
+echo  "net.ipv4.ip_forward = 1" > /etc/sysctl.conf
+
+dnf install epel-release
+
+dnf install openvpn easy-rsa 
+
+cp /usr/share/easy-rsa/3.1.6/easyrsa /etc/openvpn/
+
+cp -r /usr/share/easy-rsa/3.1.6/x509-types/ /etc/openvpn/
+
+cp -r /usr/share/easy-rsa/3.1.6/openssl-easyrsa.cnf /etc/openvpn/
+
+cd /etc/openvpn 
+
+mkdir easy-rsa 
+
+mv easyrsa openssl-easyrsa.cnf x509-types easy-rsa/
+
+cd easy-rsa 
+
+# create vars file
+
+[root@alma9-ovpn /etc/openvpn/easy-rsa]# cat vars 
+set_var EASYRSA "$PWD"
+set_var EASYRSA_PKI "$EASYRSA/pki"
+set_var EASYRSA_DN "cn_only"
+set_var EASYRSA_REQ_COUNTRY "RO"
+set_var EASYRSA_REQ_PROVINCE "Bucharest"
+set_var EASYRSA_REQ_CITY "Bucharest"
+set_var EASYRSA_REQ_ORG "osradar CERTIFICATE AUTHORITY"
+set_var EASYRSA_REQ_EMAIL "mariusavram83@gmail.com"
+set_var EASYRSA_REQ_OU "osradar EASY CA"
+set_var EASYRSA_KEY_SIZE 2048
+set_var EASYRSA_ALGO rsa
+set_var EASYRSA_CA_EXPIRE 7500
+set_var EASYRSA_CERT_EXPIRE 3650
+set_var EASYRSA_NS_SUPPORT "no"
+set_var EASYRSA_NS_COMMENT "osradar CERTIFICATE AUTHORITY"
+set_var EASYRSA_EXT_DIR "$EASYRSA/x509-types"
+set_var EASYRSA_SSL_CONF "$EASYRSA/openssl-easyrsa.cnf"
+set_var EASYRSA_DIGEST "sha256"
+
+# init pki
+
+./easyrsa init-pki
+
+./easyrsa build-ca
+
+./easyrsa gen-req ovpn-server nopass
+
+./easyrsa sign-req server ovpn-server
+
+./easyrsa gen-dh
+
+cp pki/ca.crt /etc/openvpn/server/
+
+cp pki/dh.pem /etc/openvpn/server/
+
+cp pki/private/ovpn-server.key /etc/openvpn/server/
+
+cp pki/issued/ovpn-server.crt /etc/openvpn/server/
+
+cd /etc/openvpn/server
+
+openvpn --genkey secret ta.key
+
+./easyrsa gen-req client1 nopass
+
+./easyrsa sign-req client client1
+
+cp pki/ca.crt /etc/openvpn/client/
+
+cp pki/issued/client1.crt /etc/openvpn/client/
+
+cp pki/private/client1.key /etc/openvpn/client/
+
+[root@alma9-ovpn /etc/openvpn/easy-rsa]# cat /etc/openvpn/server/server.conf 
+port 5197
+proto udp
+dev tun0
+ca /etc/openvpn/server/ca.crt
+cert /etc/openvpn/server/ovpn-server.crt
+key /etc/openvpn/server/ovpn-server.key
+dh /etc/openvpn/server/dh.pem
+server 10.87.0.0 255.255.255.0
+;allow-compression yes
+;push "redirect-gateway def1 bypass-dhcp"
+ifconfig-pool-persist fixed-ips.txt
+push "dhcp-option DNS 8.8.8.8"
+push "dhcp-option DNS 8.8.4.4"
+;duplicate-cn
+;client-to-client
+cipher AES-256-CBC
+tls-version-min 1.2
+tls-cipher TLS-DHE-RSA-WITH-AES-256-GCM-SHA384:TLS-DHE-RSA-WITH-AES-256-CBC-SHA256:TLS-DHE-RSA-WITH-AES-128-GCM-SHA256:TLS-DHE-RSA-WITH-AES-128-CBC-SHA256
+auth SHA512
+auth-nocache
+keepalive 20 60
+persist-key
+persist-tun
+tls-auth /etc/openvpn/server/ta.key 0 # This file is secret
+;tls-crypt /etc/openvpn/server/ta.key
+#compress lz4
+daemon
+user openvpn
+group openvpn
+log /var/log/openvpn-server.log
+log-append /var/log/openvpn-server.log
+verb 3
+explicit-exit-notify 1
+
+
+[root@alma9-ovpn /etc/openvpn/easy-rsa]# cat /etc/openvpn/client/client1.conf
+client
+dev tun0
+proto udp
+remote 192.168.88.243 5197
+ca ca.crt
+cert client1.crt
+key client1.key
+cipher AES-256-CBC
+auth SHA512
+auth-nocache
+tls-version-min 1.2
+tls-cipher TLS-DHE-RSA-WITH-AES-256-GCM-SHA384:TLS-DHE-RSA-WITH-AES-256-CBC-SHA256:TLS-DHE-RSA-WITH-AES-128-GCM-SHA256:TLS-DHE-RSA-WITH-AES-128-CBC-SHA256
+resolv-retry infinite
+tls-auth ta.key 1
+;compress lz4
+nobind
+persist-key
+persist-tun
+log /var/log/openvpn-client1.log
+log-append /var/log/openvpn-client2.log
+mute-replay-warnings
+verb 3
