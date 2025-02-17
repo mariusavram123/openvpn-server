@@ -2,6 +2,7 @@
 #Openvpn config generator script
 option=$1
 type=$2
+client=$3
 
 #Expect exactly 2 arguments
 if [ $# > 2 ]; then
@@ -18,6 +19,7 @@ OpenVPN config generator.
 Usage:  `basename $0` -s | --server [server_name] - Generate OpenVPN server configuration files
         `basename $0` -c | --client [client_name] - Generate OpenVPN client configuration files
         `basename $0` -i | --install - Verify and install OpenVPN and easy-rsa packages needed to build the files
+        `basename $0` -f | --full [server_name] [client_name] - Generate openvpn configuration for server and 1 client
         `basename $0` -h | --help - Show this help menu and exit
 EOF
 }
@@ -163,3 +165,97 @@ server_pki()
         exit 1
     fi
 }
+
+client_config()
+{
+# do not indent these lines
+client_dir="/etc/openvpn/client"
+cat <<-EOF > ${client_dir}/${client}.conf
+client
+dev tun0
+proto udp
+remote 10.85.0.24 5197
+ca ca.crt
+cert ${client_dir}/${client}.crt
+key ${client_dir}/${client}.key
+cipher AES-256-CBC
+auth SHA512
+auth-nocache
+tls-version-min 1.2
+tls-cipher TLS-DHE-RSA-WITH-AES-256-GCM-SHA384:TLS-DHE-RSA-WITH-AES-256-CBC-SHA256:TLS-DHE-RSA-WITH-AES-128-GCM-SHA256:TLS-DHE-RSA-WITH-AES-128-CBC-SHA256
+resolv-retry infinite
+tls-auth ${client_dir}/ta.key 1
+;compress lz4
+nobind
+persist-key
+persist-tun
+log /var/log/openvpn-client1.log
+log-append /var/log/openvpn-client2.log
+mute-replay-warnings
+verb 3
+EOF
+}
+
+client_pki() {
+    echo "Generating client certs for ${client}"
+    cd ${dir}
+    ./easyrsa gen-req ${client} nopass
+    ./easyrsa sign-req client ${client}
+    cp ${dir}/pki/ca.crt ${client_dir}
+    cp pki/issued/${client}.crt ${client_dir}
+    cp pki/private/${client}.key ${client_dir}
+    if [ ! -f ${client_dir}/${client}.conf ]; then
+        echo "Generating client configuration for ${client}"
+        client_config
+    else
+        echo "A client configration for ${client} already exists. Nothing to do."
+        exit 1
+    fi
+}
+
+script_usage() {
+    case Z${option} in
+        Z-h|Z--help)
+            show_usage
+            exit 0
+        ;;
+        Z-i|Z--install)
+            install_ovpn
+            exit 0
+        ;;
+        Z-s|Z--server)
+            case ${type} in
+            '')
+                echo "Server cannot be empty"
+                show_usage
+                exit 1
+            ;;
+            *)
+                echo "Started server config creation for ${type}"
+                server=${type}
+                install_ovpn
+                gen_vars
+                initpki
+                server_pki
+                # server_pki calls server_config function
+            ;;
+            esac
+        ;;
+        Z-c|Z--client)
+            case ${type} in
+            '')
+                echo "Client name cannot be empty"
+                show_usage
+                exit 1
+            ;;
+            *)
+                echo "Starting client configuration for ${type}"
+                client=${type}
+                client_pki
+            ;;
+            esac
+        ;;
+    esac
+}
+
+script_usage
