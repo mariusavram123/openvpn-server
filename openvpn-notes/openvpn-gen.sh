@@ -213,11 +213,39 @@ client_pki() {
     fi
 }
 
+server_tarball()
+{
+    echo "Creating server tarball for ${server}"
+    cd ${server_dir}
+    tar zcvf ${server}.tar.gz ca.crt dh.pem ta.key ${server}.crt ${server}.key ${server}.conf
+    echo "Tarball created for server ${server}. You can find it in ${server_dir}."
+}
+
+client_tarball()
+{
+    echo "Creating client tarball for ${client}"
+    cd ${client_dir}
+    tar zcvf ${client}.tar.gz ca.crt ta.key ${client}.crt ${client}.key ${client}.conf
+    echo "Tarball created for client ${client}. You can find it in ${client_dir}."
+}
+
+
 script_usage() {
     case Z${option} in
         Z-h|Z--help)
-            show_usage
-            exit 0
+            if [ ${type} == "" ] && [ ${client} == "" ]; then
+                show_usage
+                exit 0
+            elif [ -n ${type} ]; then
+                    echo "Cannot accept config generation for server or client with the help command"
+                    show_usage
+                    exit 1
+                elif [ -n ${client} ]; then
+                    echo "The third parameter should be empty with the help command"
+                    show_usage
+                    exit 1
+                fi
+            fi
         ;;
         Z-i|Z--install)
             install_ovpn
@@ -238,6 +266,7 @@ script_usage() {
                 initpki
                 server_pki
                 # server_pki calls server_config function
+                server_tarball
             ;;
             esac
         ;;
@@ -252,7 +281,28 @@ script_usage() {
                 echo "Starting client configuration for ${type}"
                 client=${type}
                 client_pki
+                client_tarball
             ;;
+            esac
+        ;;
+        Z-a|Z--all)
+            case ${type} in
+            '')
+                echo "Server cannot be empty"
+                show_usage
+                exit 1
+            ;;
+            *)
+                if [ ${client} != "" ]; then
+                    server=${type}
+                    install_ovpn
+                    gen_vars
+                    initpki
+                    server_pki
+                    client_pki
+                    server_tarball
+                    client_tarball
+                fi
             esac
         ;;
     esac
