@@ -12,6 +12,7 @@ if [ $# > 2 ]; then
     exit 1
 fi
 
+# Script usage menu
 show_usage()
 {
 cat <<-EOF
@@ -24,6 +25,7 @@ Usage:  `basename $0` -s | --server [server_name] - Generate OpenVPN server conf
 EOF
 }
 
+# installing openvpn packages
 install_ovpn()
 {
     #Verify if epel repo exist
@@ -77,6 +79,7 @@ set_var EASYRSA_DIGEST "sha256"
 EOF
 }
 
+# create server configuration
 server_config()
 {
 server_dir="/etc/openvpn/server/"
@@ -118,6 +121,7 @@ explicit-exit-notify 1
 EOF
 }
 
+# initializing pki variables
 initpki()
 {
     if [ ! -f ${dir}/vars ]; then
@@ -140,6 +144,7 @@ initpki()
     openvpn --genkey secret pki/ta.key
 }
 
+# easyrsa for server and create config
 server_pki()
 {
     if [ ! -d ${dir}/pki ]; then
@@ -166,6 +171,7 @@ server_pki()
     fi
 }
 
+# easyrsa for client and create config
 client_config()
 {
 # do not indent these lines
@@ -196,6 +202,7 @@ verb 3
 EOF
 }
 
+# pki for client
 client_pki() {
     echo "Generating client certs for ${client}"
     cd ${dir}
@@ -213,6 +220,7 @@ client_pki() {
     fi
 }
 
+# create server tarball for configurations
 server_tarball()
 {
     echo "Creating server tarball for ${server}"
@@ -221,6 +229,7 @@ server_tarball()
     echo "Tarball created for server ${server}. You can find it in ${server_dir}."
 }
 
+# create client tarball for configurations
 client_tarball()
 {
     echo "Creating client tarball for ${client}"
@@ -229,7 +238,7 @@ client_tarball()
     echo "Tarball created for client ${client}. You can find it in ${client_dir}."
 }
 
-
+# usage of the script - main function that calls all other small functions
 script_usage() {
     case Z${option} in
         Z-h|Z--help)
@@ -308,4 +317,5 @@ script_usage() {
     esac
 }
 
+# call the script_usage function according to the help menu
 script_usage
