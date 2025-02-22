@@ -1,20 +1,11 @@
-#!/bin/bash
+#!/bin/bash -x
 #Openvpn config generator script
 option=$1
 type=$2
 client=$3
 
-#Expect exactly 2 arguments
-if [ $# > 2 ]; then
-    echo "Only 1 or 2 arguments expected."
-    echo "Too many arguments. Exiting ..."
-    show_usage
-    exit 1
-fi
-
 # Script usage menu
-show_usage()
-{
+show_usage () {
 cat <<-EOF
 OpenVPN config generator.
 Usage:  `basename $0` -s | --server [server_name] - Generate OpenVPN server configuration files
@@ -25,9 +16,45 @@ Usage:  `basename $0` -s | --server [server_name] - Generate OpenVPN server conf
 EOF
 }
 
+#Set the number of arguments depending of the option
+
+case Z${option} in
+    Z-s|Z--server|Z-c|Z--client)
+        if [ $# != 2 ]; then
+            echo "Only 2 arguments allowed with server or client option."
+            show_usage
+            exit 1
+        fi
+    ;;
+    Z-i|Z--install)
+        if [ $# != 1 ]; then
+            echo "No argument needed with -i| --install option."
+            show_usage
+            exit 1
+        fi
+    ;;
+    Z-f|Z--full)
+        if [ $# != 3 ]; then
+            echo "Expected exactly 3 arguments for the full option."
+            show_usage
+            exit 1
+        fi
+    ;;
+    Z-h|Z--help)
+        if [ $# != 1 ]; then
+            echo "Only one argument expected for the help option."
+            show_usage
+            exit 1
+        fi
+    ;;
+    X*)
+        echo "Unknown usage."
+        show_usage
+        exit 1
+    esac
+
 # installing openvpn packages
-install_ovpn()
-{
+install_ovpn () {
     #Verify if epel repo exist
     if [ ! -f /etc/yum.repos.d/epel.repo ]; then
         dnf makecache
@@ -44,11 +71,10 @@ install_ovpn()
 }
 
 # generate vars file
-gen_vars()
-{
+gen_vars () {
     echo "Making sure OpenVPN is installed"
     install_ovpn
-    dir="/etc/openvpn/easy-rsa/"
+    dir="/etc/openvpn/easy-rsa"
     if [ ! -d ${dir} ]; then
         mkdir -p ${dir}
     fi
@@ -58,8 +84,8 @@ gen_vars()
     cp -rf /usr/share/easy-rsa/3/openssl-easyrsa.cnf ${dir}
 #do not indent these lines
 cat <<-EOF >> ${dir}/vars
-set_var EASYRSA "$PWD"
-set_var EASYRSA_PKI "$EASYRSA/pki"
+set_var EASYRSA \"\$PWD\"
+set_var EASYRSA_PKI \"\$EASYRSA/pki\"
 set_var EASYRSA_DN "cn_only"
 set_var EASYRSA_REQ_COUNTRY "RO"
 set_var EASYRSA_REQ_PROVINCE "Bucharest"
@@ -73,16 +99,19 @@ set_var EASYRSA_CA_EXPIRE 7500
 set_var EASYRSA_CERT_EXPIRE 3650
 set_var EASYRSA_NS_SUPPORT "no"
 set_var EASYRSA_NS_COMMENT "OpenVPN CERTIFICATE AUTHORITY"
-set_var EASYRSA_EXT_DIR "$EASYRSA/x509-types"
-set_var EASYRSA_SSL_CONF "$EASYRSA/openssl-easyrsa.cnf"
+set_var EASYRSA_EXT_DIR \"\$EASYRSA/x509-types\"
+set_var EASYRSA_SSL_CONF \"\$EASYRSA/openssl-easyrsa.cnf\"
 set_var EASYRSA_DIGEST "sha256"
 EOF
 }
 
 # create server configuration
-server_config()
-{
+server_config () {
 server_dir="/etc/openvpn/server/"
+if [ -z ${server} ]; then
+    echo "Server variable is empty."
+    exit 1
+fi
 #do not indent these lines
 cat <<-EOF > ${server_dir}/${server}.conf
 port 5197
@@ -122,8 +151,8 @@ EOF
 }
 
 # initializing pki variables
-initpki()
-{
+initpki () {
+    dir="/etc/openvpn/easy-rsa"
     if [ ! -f ${dir}/vars ]; then
         echo "Generating vars file"
         gen_vars
@@ -141,27 +170,35 @@ initpki()
     echo "Generating dh parameters"
     ./easyrsa gen-dh
     echo "Generating TLS Auth key"
-    openvpn --genkey secret pki/ta.key
+    openvpn --genkey secret ta.key
 }
 
 # easyrsa for server and create config
-server_pki()
-{
+server_pki () {
+    if [ -z ${server} ]; then
+        echo "Server variable is empty"
+	exit 1
+    fi
     if [ ! -d ${dir}/pki ]; then
         initpki
     else
         echo "PKI variables already initialized"
     fi
     echo "Generating server certs"
+    if [ -z ${server} ]; then
+        echo "Unknown server name."
+    fi
+    #dir="/etc/openvpn/easy-rsa"
     cd ${dir}
     ./easyrsa gen-req ${server} nopass
     ./easyrsa sign-req server ${server}
     #copy certificates and keys to server directory
+    server_dir="/etc/openvpn/server/"
     cp ${dir}/pki/ca.crt ${server_dir}
     cp ${dir}/pki/dh.pem ${server_dir}
     cp ${dir}/pki/private/${server}.key ${server_dir}
     cp ${dir}/pki/issued/${server}.crt ${server_dir}
-    cp ${dir}/pki/ta.key ${server_dir}
+    cp ${dir}/ta.key ${server_dir}
     if [ ! -f ${server_dir}/${server}.conf ]; then
         echo "Generating server configuration"
         server_config
@@ -172,8 +209,11 @@ server_pki()
 }
 
 # easyrsa for client and create config
-client_config()
-{
+client_config () {
+if [ -z ${client} ]; then
+    echo "Client variable is empty."
+    exit 1
+fi
 # do not indent these lines
 client_dir="/etc/openvpn/client"
 cat <<-EOF > ${client_dir}/${client}.conf
@@ -203,9 +243,14 @@ EOF
 }
 
 # pki for client
-client_pki() {
+client_pki () {
+    if [ -z ${client} ]; then
+	echo "Client variable is empty."
+	exit 1
+    fi
     echo "Generating client certs for ${client}"
     cd ${dir}
+    client_dir="/etc/openvpn/client"
     ./easyrsa gen-req ${client} nopass
     ./easyrsa sign-req client ${client}
     cp ${dir}/pki/ca.crt ${client_dir}
@@ -221,8 +266,7 @@ client_pki() {
 }
 
 # create server tarball for configurations
-server_tarball()
-{
+server_tarball () {
     echo "Creating server tarball for ${server}"
     cd ${server_dir}
     tar zcvf ${server}.tar.gz ca.crt dh.pem ta.key ${server}.crt ${server}.key ${server}.conf
@@ -230,8 +274,7 @@ server_tarball()
 }
 
 # create client tarball for configurations
-client_tarball()
-{
+client_tarball () {
     echo "Creating client tarball for ${client}"
     cd ${client_dir}
     tar zcvf ${client}.tar.gz ca.crt ta.key ${client}.crt ${client}.key ${client}.conf
@@ -239,21 +282,20 @@ client_tarball()
 }
 
 # usage of the script - main function that calls all other small functions
-script_usage() {
+script_usage () {
     case Z${option} in
         Z-h|Z--help)
-            if [ ${type} == "" ] && [ ${client} == "" ]; then
+            if [ -z ${type} ] && [ -z ${client} ]; then
                 show_usage
                 exit 0
             elif [ -n ${type} ]; then
-                    echo "Cannot accept config generation for server or client with the help command"
-                    show_usage
-                    exit 1
-                elif [ -n ${client} ]; then
-                    echo "The third parameter should be empty with the help command"
-                    show_usage
-                    exit 1
-                fi
+                echo "Cannot accept config generation for server or client with the help command"
+                show_usage
+                exit 1
+            elif [ -n ${client} ]; then
+                echo "The third parameter should be empty with the help command"
+                show_usage
+                exit 1
             fi
         ;;
         Z-i|Z--install)
@@ -272,7 +314,7 @@ script_usage() {
                 server=${type}
                 install_ovpn
                 gen_vars
-                initpki
+                #initpki
                 server_pki
                 # server_pki calls server_config function
                 server_tarball
@@ -289,6 +331,7 @@ script_usage() {
             *)
                 echo "Starting client configuration for ${type}"
                 client=${type}
+                install_ovpn
                 client_pki
                 client_tarball
             ;;
@@ -306,7 +349,7 @@ script_usage() {
                     server=${type}
                     install_ovpn
                     gen_vars
-                    initpki
+                    #initpki
                     server_pki
                     client_pki
                     server_tarball
@@ -314,6 +357,11 @@ script_usage() {
                 fi
             esac
         ;;
+	Z*)
+	   echo "Unknown option."
+	   show_usage
+	   exit 0
+	;;
     esac
 }
 
