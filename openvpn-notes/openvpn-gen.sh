@@ -107,7 +107,7 @@ EOF
 
 # create server configuration
 server_config () {
-server_dir="/etc/openvpn/server/"
+server_dir="/etc/openvpn/server"
 if [ -z ${server} ]; then
     echo "Server variable is empty."
     exit 1
@@ -235,8 +235,8 @@ tls-auth ${client_dir}/ta.key 1
 nobind
 persist-key
 persist-tun
-log /var/log/openvpn-client1.log
-log-append /var/log/openvpn-client2.log
+log /var/log/openvpn-${client}.log
+log-append /var/log/openvpn-${client}.log
 mute-replay-warnings
 verb 3
 EOF
@@ -344,7 +344,7 @@ script_usage () {
             ;;
             esac
         ;;
-        Z-a|Z--all)
+        Z-f|Z--full)
             case ${type} in
             '')
                 echo "Server cannot be empty"
