@@ -4,6 +4,11 @@ option=$1
 type=$2
 client=$3
 
+if [ `id -u` != 0 ]; then
+    echo "Please run as root or with sudo privileges."
+    exit 13
+fi
+
 # Script usage menu
 show_usage () {
 cat <<-EOF
