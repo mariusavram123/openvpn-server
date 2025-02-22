@@ -249,13 +249,15 @@ client_pki () {
 	exit 1
     fi
     echo "Generating client certs for ${client}"
+    dir="/etc/openvpn/easy-rsa"
     cd ${dir}
-    client_dir="/etc/openvpn/client"
+    client_dir="/etc/openvpn/client/"
     ./easyrsa gen-req ${client} nopass
     ./easyrsa sign-req client ${client}
-    cp ${dir}/pki/ca.crt ${client_dir}
+    cp pki/ca.crt ${client_dir}
     cp pki/issued/${client}.crt ${client_dir}
     cp pki/private/${client}.key ${client_dir}
+    cp ta.key ${client_dir}
     if [ ! -f ${client_dir}/${client}.conf ]; then
         echo "Generating client configuration for ${client}"
         client_config
@@ -270,15 +272,20 @@ server_tarball () {
     echo "Creating server tarball for ${server}"
     cd ${server_dir}
     tar zcvf ${server}.tar.gz ca.crt dh.pem ta.key ${server}.crt ${server}.key ${server}.conf
-    echo "Tarball created for server ${server}. You can find it in ${server_dir}."
+    if [ $? -eq 0 ]; then
+        echo "Tarball created for server ${server}. You can find it in ${server_dir}."
+    fi
 }
 
 # create client tarball for configurations
 client_tarball () {
     echo "Creating client tarball for ${client}"
+    client_dir="/etc/openvpn/client"
     cd ${client_dir}
     tar zcvf ${client}.tar.gz ca.crt ta.key ${client}.crt ${client}.key ${client}.conf
-    echo "Tarball created for client ${client}. You can find it in ${client_dir}."
+    if [ $? -eq 0 ]; then
+        echo "Tarball created for client ${client}. You can find it in ${client_dir}."
+    fi
 }
 
 # usage of the script - main function that calls all other small functions
