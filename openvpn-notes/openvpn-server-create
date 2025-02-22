@@ -1,0 +1,158 @@
+OPENVPN server Mageia 7
+
+mkdir /etc/openvpn/.pki
+
+cp -r /usr/share/openvpn/easyrsa/* /etc/openvpn/.pki
+
+cp /usr/share/openvpn/sample-config-files/server.conf /etc/openvpn/
+
+/etc/openvpn/server.conf
+
+local 192.168.0.30
+port 5694
+proto udp
+dev tun-ovpn
+ca /etc/openvpn/.pki/keys/ca.crt
+cert /etc/openvpn/.pki/keys/server.crt
+key /etc/openvpn/.pki/keys/server.key  # This file should be kept secret
+dh /etc/openvpn/.pki/keys/dh2048.pem
+topology subnet
+server 10.8.0.0 255.255.255.0
+ifconfig-pool-persist ipp.txt
+;push "route 192.168.10.0 255.255.255.0"
+;push "route 192.168.20.0 255.255.255.0"
+push "dhcp-option DNS 8.8.8.8"
+push "dhcp-option DNS 8.8.4.4"
+client-to-client
+keepalive 10 120
+tls-auth /etc/openvpn/.pki/keys/ta.key 0
+cipher AES-256-CBC
+;compress lz4-v2
+user openvpn
+group openvpn
+status /var/log/openvpn/openvpn-status.log
+log-append /var/log/openvpn/openvpn-append.log
+verb 3
+explicit-exit-notify 1
+
+
+generate ta key:
+
+openvpn --genkey --secret ta.key
+
+mkdir /etc/openvpn/.pki/keys
+
+edit /etc/openvpn/.pki/vars
+
+export EASY_RSA="/etc/openvpn/.pki"
+export OPENSSL="openssl"
+export PKCS11TOOL="pkcs11-tool"
+export GREP="grep"
+export KEY_CONFIG=`$EASY_RSA/whichopensslcnf $EASY_RSA`
+export KEY_DIR="$EASY_RSA/keys"
+echo NOTE: If you run ./clean-all, I will be doing a rm -rf on $KEY_DIR
+export PKCS11_MODULE_PATH="dummy"
+export PKCS11_PIN="dummy"
+export KEY_SIZE=2048
+export CA_EXPIRE=3650
+export KEY_EXPIRE=3650
+export KEY_COUNTRY="RO"
+export KEY_PROVINCE="RO"
+export KEY_CITY="Bucharest"
+export KEY_ORG="Marius-home"
+export KEY_EMAIL="mariusavram83@gmail.com"
+export KEY_EMAIL=mariusavram83@gmail.com
+export KEY_CN=openvpn.marius.local
+export KEY_NAME=server
+export KEY_OU="Marius-home-SRL"
+
+
+edit /etc/openvpn/.pki/whichopensslcnf
+
+#!/usr/bin/sh
+
+cnf="$1/openssl.cnf"
+
+if [ "$OPENSSL" ]; then
+        if $OPENSSL version | grep -E "0\.9\.6[[:alnum:]]?" > /dev/null; then
+                cnf="$1/openssl-0.9.6.cnf"
+        elif $OPENSSL version | grep -E "0\.9\.8[[:alnum:]]?" > /dev/null; then
+                cnf="$1/openssl-0.9.8.cnf"
+        elif $OPENSSL version | grep -E "1\.0\.[[:digit:]][[:alnum:]]?" > /dev/null; then
+                cnf="$1/openssl-1.0.0.cnf"
+        elif $OPENSSL version | grep -E "1\.1\.[[:digit:]][[:alnum:]]?" > /dev/null; then
+                cnf="$1/openssl-1.0.0.cnf"
+        else
+                cnf="$1/openssl.cnf"
+        fi
+fi
+
+echo $cnf
+
+if [ ! -r $cnf ]; then
+    echo "**************************************************************" >&2
+    echo "  No $cnf file could be found" >&2
+    echo "  Further invocations will fail" >&2
+    echo "**************************************************************" >&2
+fi
+
+exit 0
+
+added these 2 lines
+
+        elif $OPENSSL version | grep -E "1\.1\.[[:digit:]][[:alnum:]]?" > /dev/null; then
+                cnf="$1/openssl-1.0.0.cnf"
+
+
+cd /etc/openvpn/.pki
+
+source ./vars
+
+./clean-all
+
+echo "unique_subject = yes" > /etc/openvpn/.pki/keys/index.txt.attr
+
+./build-ca (this creates ca.crt and ca.key)
+
+./build-key-server server (this builds server.crt and server.key)
+
+./build-dh (this builds dh2048.pem)
+
+
+./build-key client1 (builds client1.key + certificate)
+
+Client config:
+
+client
+;dev tap
+dev tun-ovpn
+;proto tcp
+proto udp
+remote 192.168.0.30 5694
+;remote-random
+resolv-retry infinite
+nobind
+user openvpn
+group openvpn
+# Try to preserve some state across restarts.
+persist-key
+persist-tun
+ca /etc/openvpn/.pki/keys/ca.crt
+cert /etc/openvpn/.pki/keys/client1.crt
+key /etc/openvpn/.pki/keys/client1.key
+remote-cert-tls server
+tls-auth /etc/openvpn/.pki/keys/ta.key 1
+cipher AES-256-CBC
+# Set log file verbosity.
+verb 3
+status /var/log/openvpn/openvpn-client1.log
+log-append  /var/log/openvpn/openvpn-append.log
+
+Send the client config to the client, + add.
+
+- Server - ca.crt
+- Client cert - client1.crt
+- Client1 key - client1.key
+- Server ta key - ta.key
+
+TODO: AUTH with user/pass
