@@ -1,0 +1,98 @@
+Openvpn on Mikrotik:
+
+- Create certificates:
+
+/certificate
+add name=CA common-name=CA key-usage=key-cert-sign,crl-sign
+add name=Server common-name=Server
+add name=Client1 common-name=Client1
+# add a tls certificate
+add name=testta common-name=testta key-usage=tls-server,tls-client
+
+- Sign certificates:
+
+/certificate
+sign CA
+sign Server ca-crl-host=172.16.29.18 name=ServerCA
+sign Client1
+sign testta
+
+- Export certificates:
+
+/certificate
+export-certificate CA
+export-certificate ServerCA
+export-certificate Client1
+export-certificate testta
+
+- See the exported files:
+
+/file/print
+
+- Add an ip pool to be allocated to clients:
+
+/ip/pool
+add name=ovpn-pool ranges=10.85.0.15-10.85.0.200
+
+- Add a PPP profile
+
+/ppp/profile
+add name=ovpn local-address=172.16.29.18 remote-address=ovpn-pool
+
+- Add users and secrets for the profile:
+
+/ppp/secret
+add name=client1 password=Avram12345 profile=ovpn
+add name=client2 password=Avram12345 profile=ovpn
+
+- Add server interface for openvpn and tie it together with the certificate. Use protocol UDP(default is tcp):
+
+/interface/ovpn-server/server
+add disabled=no name=Server certificate=ServerCA protocol=udp port=5197
+
+- Add a client and tie it with user and password, and with the certificate, also set protocol and port:
+/interface/ovpn-client
+add name=ovpn-client1 connect-to=172.16.29.18 user=client1 password=Avram12345 certificate=Client1
+set 0 protocol=udp port=5197
+
+- Show the connected client:
+
+/interface/ovpn-server/print
+Flags: D - DYNAMIC; R - RUNNING
+Columns: NAME, USER, MTU, CLIENT-ADDRESS, UPTIME, ENCODING
+#    NAME            USER      MTU  CLIENT-ADDRESS  UPTIME  ENCODING
+0 DR <ovpn-client1>  client1  1500  172.16.29.18    3m15s   BF-128-CBC/SHA1
+
+- Add routes for the server to reach the client:
+
+/ip/route
+add dst-address=10.45.80.0/28 gateway=ovpn-client1
+add dst-address=10.45.88.0/24 gateway=ovpn-client1
+
+- Add routes in the server to be pushed to the clients
+
+/interface/ovpn-server/server
+#route network/IP [netmask] [gateway] [metric].
+set 1 push-routes="192.168.102.0 255.255.255.0 192.168.109.1 9"
+
+Printing the certificates
+
+/certificate/print detail
+Flags: K - private-key; L - crl; C - smart-card-key; A - authority; I - issued, R - revoked; E - expired; T - trusted
+ 0 K  A  T name="CA" digest-algorithm=sha256 key-type=rsa common-name="CA" key-size=2048 subject-alt-name="" days-valid=365 trusted=yes key-usage=key-cert-sign,crl-sign serial-number="6F021547A72A483D"
+           fingerprint="ad5d73bc6be972542204fb27f63954bd4a41372b72cad71af35f5410b8076742" akid="" skid=e74a27390d80c3e788a79e1f2a30833e95f3033b invalid-before=2025-02-25 21:09:24
+           invalid-after=2026-02-25 21:09:24 expires-after=52w23h8m7s
+
+ 1 K  A  T name="Client1" digest-algorithm=sha256 key-type=rsa common-name="Client1" key-size=2048 subject-alt-name="" days-valid=365 trusted=yes
+           key-usage=digital-signature,key-encipherment,data-encipherment,key-cert-sign,crl-sign,tls-server,tls-client serial-number="34B602564DFB6EA5"
+           fingerprint="90c87b6fe57a08935d25ec6a2ea746d8974fb37eda57309c8ea6b7a34f0fd573" akid="" skid=ac91ed00fd89af7ed00ba750af7d39ddceabb186 invalid-before=2025-02-25 21:10:26
+           invalid-after=2026-02-25 21:10:26 expires-after=52w23h9m9s
+
+ 2 KL A  T name="ServerCA" digest-algorithm=sha256 key-type=rsa common-name="Server" key-size=2048 subject-alt-name="" days-valid=365 trusted=yes
+           key-usage=digital-signature,key-encipherment,data-encipherment,key-cert-sign,crl-sign,tls-server,tls-client ca-crl-host="172.16.29.18" serial-number="2ABA149C5A0233F1"
+           fingerprint="caef809838f702535675e947f007e2f8e44cb0f12986fcd729639bf154d18170" akid="" skid=734da9744aa28c1badf9cef6c8a4e25ec13aa2bc invalid-before=2025-02-25 21:15:28
+           invalid-after=2026-02-25 21:15:28 expires-after=52w23h14m11s
+
+ 3 K   I T name="testta" digest-algorithm=sha256 key-type=rsa country="RO" key-size=2048 subject-alt-name="" days-valid=365 trusted=yes key-usage=tls-server,tls-client ca=CA serial-number="32DDABECA571042D"
+           fingerprint="ecffdfca008a0f081f12fabd6e3f4a0e7e624dbee85d55a59ee629991b9d92fc" akid=e74a27390d80c3e788a79e1f2a30833e95f3033b skid=bed7acc951710800e866c1eb73b4010a1583170a
+           invalid-before=2025-02-25 21:59:15 invalid-after=2026-02-25 21:59:15 expires-after=52w23h57m58s
