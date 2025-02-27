@@ -13,7 +13,7 @@ add name=testta common-name=testta key-usage=tls-server,tls-client
 
 /certificate
 sign CA
-sign Server ca-crl-host=172.16.29.18 name=ServerCA
+sign Server ca-crl-host=192.168.x.y name=ServerCA
 sign Client1
 sign testta
 
@@ -37,13 +37,13 @@ add name=ovpn-pool ranges=10.85.0.15-10.85.0.200
 - Add a PPP profile
 
 /ppp/profile
-add name=ovpn local-address=172.16.29.18 remote-address=ovpn-pool
+add name=ovpn local-address=192.168.x.y remote-address=ovpn-pool
 
 - Add users and secrets for the profile:
 
 /ppp/secret
-add name=client1 password=Avram12345 profile=ovpn
-add name=client2 password=Avram12345 profile=ovpn
+add name=client1 password=123xx profile=ovpn
+add name=client2 password=123xx profile=ovpn
 
 - Add server interface for openvpn and tie it together with the certificate. Use protocol UDP(default is tcp):
 
@@ -52,7 +52,7 @@ add disabled=no name=Server certificate=ServerCA protocol=udp port=5197
 
 - Add a client and tie it with user and password, and with the certificate, also set protocol and port:
 /interface/ovpn-client
-add name=ovpn-client1 connect-to=172.16.29.18 user=client1 password=Avram12345 certificate=Client1
+add name=ovpn-client1 connect-to=192.168.x.y user=client1 password=123xx certificate=Client1
 set 0 protocol=udp port=5197
 
 - Show the connected client:
@@ -61,7 +61,7 @@ set 0 protocol=udp port=5197
 Flags: D - DYNAMIC; R - RUNNING
 Columns: NAME, USER, MTU, CLIENT-ADDRESS, UPTIME, ENCODING
 #    NAME            USER      MTU  CLIENT-ADDRESS  UPTIME  ENCODING
-0 DR <ovpn-client1>  client1  1500  172.16.29.18    3m15s   BF-128-CBC/SHA1
+0 DR <ovpn-client1>  client1  1500  192.168.x.y    3m15s   BF-128-CBC/SHA1
 
 - Add routes for the server to reach the client:
 
