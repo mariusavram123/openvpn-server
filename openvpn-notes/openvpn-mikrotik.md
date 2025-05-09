@@ -1,82 +1,108 @@
-Openvpn on Mikrotik:
+## Openvpn on Mikrotik:
 
 - Create certificates:
 
+```
 /certificate
 add name=CA common-name=CA key-usage=key-cert-sign,crl-sign
 add name=Server common-name=Server
 add name=Client1 common-name=Client1
 # add a tls certificate
 add name=testta common-name=testta key-usage=tls-server,tls-client
+```
 
 - Sign certificates:
 
+```
 /certificate
 sign CA
 sign Server ca-crl-host=192.168.x.y name=ServerCA
 sign Client1
 sign testta
+```
 
 - Export certificates:
 
+```
 /certificate
 export-certificate CA
 export-certificate ServerCA
 export-certificate Client1
 export-certificate testta
+```
 
 - See the exported files:
 
+```
 /file/print
+```
 
 - Add an ip pool to be allocated to clients:
 
+```
 /ip/pool
 add name=ovpn-pool ranges=10.85.0.15-10.85.0.200
+```
 
 - Add a PPP profile
 
+```
 /ppp/profile
 add name=ovpn local-address=192.168.x.y remote-address=ovpn-pool
+```
 
 - Add users and secrets for the profile:
 
+```
 /ppp/secret
 add name=client1 password=123xx profile=ovpn
 add name=client2 password=123xx profile=ovpn
+```
 
 - Add server interface for openvpn and tie it together with the certificate. Use protocol UDP(default is tcp):
 
+```
 /interface/ovpn-server/server
 add disabled=no name=Server certificate=ServerCA protocol=udp port=5197
+```
 
 - Add a client and tie it with user and password, and with the certificate, also set protocol and port:
+
+```
 /interface/ovpn-client
 add name=ovpn-client1 connect-to=192.168.x.y user=client1 password=123xx certificate=Client1
 set 0 protocol=udp port=5197
+```
 
 - Show the connected client:
 
+```
 /interface/ovpn-server/print
 Flags: D - DYNAMIC; R - RUNNING
 Columns: NAME, USER, MTU, CLIENT-ADDRESS, UPTIME, ENCODING
 #    NAME            USER      MTU  CLIENT-ADDRESS  UPTIME  ENCODING
 0 DR <ovpn-client1>  client1  1500  192.168.x.y    3m15s   BF-128-CBC/SHA1
+```
 
 - Add routes for the server to reach the client:
 
+```
 /ip/route
 add dst-address=10.45.80.0/28 gateway=ovpn-client1
 add dst-address=10.45.88.0/24 gateway=ovpn-client1
+```
 
 - Add routes in the server to be pushed to the clients
 
+```
 /interface/ovpn-server/server
 #route network/IP [netmask] [gateway] [metric].
 set 1 push-routes="192.168.102.0 255.255.255.0 192.168.109.1 9"
+```
 
-Printing the certificates
+- Printing the certificates
 
+```
 /certificate/print detail
 Flags: K - private-key; L - crl; C - smart-card-key; A - authority; I - issued, R - revoked; E - expired; T - trusted
  0 K  A  T name="CA" digest-algorithm=sha256 key-type=rsa common-name="CA" key-size=2048 subject-alt-name="" days-valid=365 trusted=yes key-usage=key-cert-sign,crl-sign serial-number="6F021547A72A483D"
@@ -96,3 +122,4 @@ Flags: K - private-key; L - crl; C - smart-card-key; A - authority; I - issued, 
  3 K   I T name="testta" digest-algorithm=sha256 key-type=rsa country="RO" key-size=2048 subject-alt-name="" days-valid=365 trusted=yes key-usage=tls-server,tls-client ca=CA serial-number="32DDABECA571042D"
            fingerprint="ecffdfca008a0f081f12fabd6e3f4a0e7e624dbee85d55a59ee629991b9d92fc" akid=e74a27390d80c3e788a79e1f2a30833e95f3033b skid=bed7acc951710800e866c1eb73b4010a1583170a
            invalid-before=2025-02-25 21:59:15 invalid-after=2026-02-25 21:59:15 expires-after=52w23h57m58s
+```
